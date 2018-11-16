@@ -158,4 +158,7 @@ class TracerContext {
         }
         return false;
     }
+    public Recording getRecording(){
+        return recording;
+    }
 }

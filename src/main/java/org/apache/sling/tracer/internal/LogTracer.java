@@ -28,6 +28,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Callable;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -239,6 +240,27 @@ public class LogTracer {
         }
     }
 
+
+    public <T> T withTracerConfig(String tracerSetNames,String tracerConfig,Callable<T> callable) throws Exception {
+       Recording recording = Recording.NOOP;
+          
+       TracerContext requestTracerContext = requestContextHolder.get();
+       if(requestTracerContext != null){
+          recording = requestTracerContext.getRecording();
+          
+       }
+       
+       
+       TracerContext tracerContext = getTracerContext(tracerSetNames,tracerConfig,recording);
+       try{
+          enableCollector(tracerContext);
+          return callable.call();
+       } finally {
+            disableCollector();
+       }
+        
+    }
+
     private void unregisterLogCollector() {
         synchronized (logCollectorRegCount) {
             int count = logCollectorRegCount.decrementAndGet();
@@ -248,7 +270,16 @@ public class LogTracer {
             }
         }
     }
-
+    
+    void enableCollector(TracerContext tracerContext){
+        requestContextHolder.set(tracerContext);
+        registerLogCollector();
+    }
+    void disableCollector(){
+         requestContextHolder.remove();
+         unregisterLogCollector();
+    }
+    
     private abstract class AbstractFilter implements Filter {
         @Override
         public void init(FilterConfig filterConfig) throws ServletException {
@@ -259,15 +290,6 @@ public class LogTracer {
 
         }
 
-        protected void enableCollector(TracerContext tracerContext) {
-            requestContextHolder.set(tracerContext);
-            registerLogCollector();
-        }
-
-        protected void disableCollector() {
-            requestContextHolder.remove();
-            unregisterLogCollector();
-        }
     }
 
     /**
